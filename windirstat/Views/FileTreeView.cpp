@@ -219,5 +219,8 @@ int CFileAISafetyView::OnCreate(const LPCREATESTRUCT lpCreateStruct)
 
     m_control.OnColumnsInserted();
 
+    // Initialize root item
+    m_control.AfterDeleteAllItems();
+
     return 0;
 }

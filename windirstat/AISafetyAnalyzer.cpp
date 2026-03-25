@@ -39,6 +39,10 @@ CAISafetyAnalyzer::~CAISafetyAnalyzer()
 
 CAISafetyAnalyzer* CAISafetyAnalyzer::Get()
 {
+    if (s_singleton == nullptr)
+    {
+        s_singleton = new CAISafetyAnalyzer();
+    }
     return s_singleton;
 }
 

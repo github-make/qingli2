@@ -37,6 +37,8 @@ CFileAISafetyControl* CFileAISafetyControl::m_singleton = nullptr;
 
 void CFileAISafetyControl::AddPendingItem(CItem* item)
 {
+    if (m_rootItem == nullptr) return;
+
     // Check if already tracked
     if (m_itemTracker.contains(item)) return;
 
