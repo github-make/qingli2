@@ -88,7 +88,7 @@ void CAISafetyAnalyzer::WorkerProc(std::vector<CItem*> items, std::stop_token st
     }
 
     // Step 2: Process files in batches
-    const int batchSize = std::max(1, static_cast<int>(COptions::AIBatchSize));
+    const int batchSize = (std::max)(1, static_cast<int>(COptions::AIBatchSize));
     std::vector<FileAnalysisInfo> batch;
     batch.reserve(batchSize);
 
@@ -371,7 +371,7 @@ static std::wstring Utf8ToWide(const std::string& utf8)
     return result;
 }
 
-static std::string FormatFileTime(const FILETIME& ft)
+static std::string AiFormatFileTime(const FILETIME& ft)
 {
     SYSTEMTIME st;
     FileTimeToSystemTime(&ft, &st);
@@ -381,7 +381,7 @@ static std::string FormatFileTime(const FILETIME& ft)
     return buf;
 }
 
-static std::string FormatAttributes(DWORD attrs)
+static std::string AiFormatAttributes(DWORD attrs)
 {
     std::string result;
     if (attrs & FILE_ATTRIBUTE_READONLY) result += "R";
@@ -407,8 +407,8 @@ std::string CAISafetyAnalyzer::BuildBatchRequest(const std::vector<FileAnalysisI
         const auto& f = batch[i];
         userMsg << "[" << i << "] Path: " << WideToUtf8(f.path)
             << " | Size: " << f.sizePhysical
-            << " | Modified: " << FormatFileTime(f.lastChange)
-            << " | Attrs: " << FormatAttributes(f.attributes);
+            << " | Modified: " << AiFormatFileTime(f.lastChange)
+            << " | Attrs: " << AiFormatAttributes(f.attributes);
 
         if (!f.contentHead.empty())
         {

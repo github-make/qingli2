@@ -19,6 +19,20 @@
 #include "PageAIAssistant.h"
 #include "WinHttpClient.h"
 
+namespace
+{
+    std::string ToUtf8(const std::wstring& wide)
+    {
+        if (wide.empty()) return {};
+        const int size = WideCharToMultiByte(CP_UTF8, 0, wide.data(),
+            static_cast<int>(wide.size()), nullptr, 0, nullptr, nullptr);
+        std::string result(size, 0);
+        WideCharToMultiByte(CP_UTF8, 0, wide.data(),
+            static_cast<int>(wide.size()), result.data(), size, nullptr, nullptr);
+        return result;
+    }
+}
+
 IMPLEMENT_DYNAMIC(CPageAIAssistant, CMFCPropertyPage)
 
 CPageAIAssistant::CPageAIAssistant() : CMFCPropertyPage(IDD) {}
@@ -97,7 +111,7 @@ void CPageAIAssistant::OnBnClickedTestConnection()
 
     CWinHttpClient client;
     const std::string body = R"({"model":")" +
-        WideToUtf8(std::wstring(m_model)) +
+        ToUtf8(std::wstring(m_model)) +
         R"(","messages":[{"role":"user","content":"Hello"}],"max_tokens":5})";
 
     const auto response = client.Post(std::wstring(m_apiUrl), body, std::wstring(m_apiKey));

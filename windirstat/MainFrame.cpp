@@ -1465,7 +1465,7 @@ void CMainFrame::OnAISafetyCheck()
     }
 
     // Get selected items
-    const auto items = CDirStatDoc::GetDocument()->GetAllSelected();
+    const auto items = CDirStatDoc::Get()->GetAllSelected();
     if (items.empty()) return;
 
     // Show the AI Safety tab
@@ -1478,7 +1478,7 @@ void CMainFrame::OnAISafetyCheck()
         ctrl->ClearResults();
 
         // Add pending items
-        for (const auto item : items)
+        for (auto* item : items)
         {
             ctrl->AddPendingItem(item);
         }
@@ -1495,7 +1495,6 @@ void CMainFrame::OnAISafetyCheck()
     });
     analyzer->SetCompleteCallback([]()
     {
-        // Analysis complete - could add notification here
     });
 
     std::vector<CItem*> itemVec(items.begin(), items.end());
@@ -1504,6 +1503,6 @@ void CMainFrame::OnAISafetyCheck()
 
 void CMainFrame::OnUpdateAISafetyCheck(CCmdUI* pCmdUI)
 {
-    pCmdUI->Enable(CDirStatDoc::GetDocument() != nullptr &&
-        !CDirStatDoc::GetDocument()->GetAllSelected().empty());
+    pCmdUI->Enable(CDirStatDoc::Get() != nullptr &&
+        !CDirStatDoc::Get()->GetAllSelected().empty());
 }
