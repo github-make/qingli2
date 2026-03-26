@@ -49,15 +49,15 @@ void CFileAISafetyControl::AddPendingItem(CItem* item)
 
 void CFileAISafetyControl::UpdateResult(CItem* item, SAFETY_LEVEL level, const std::wstring& reason)
 {
-    auto it = m_itemTracker.find(item);
+    if (item == nullptr)
+    {
+        return;
+    }
+
+    const auto it = m_itemTracker.find(item);
     if (it == m_itemTracker.end())
     {
-        AddPendingItem(item);
-        it = m_itemTracker.find(item);
-        if (it == m_itemTracker.end())
-        {
-            return;
-        }
+        return;
     }
 
     it->second->SetSafetyResult(level, reason);

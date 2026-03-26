@@ -58,6 +58,9 @@ void CDirStatDoc::DeleteContents()
     // Wait for system to fully shutdown
     StopScanningEngine(Abort);
 
+    // Stop any AI analysis so queued callbacks cannot target stale document items
+    CAISafetyAnalyzer::Get()->Cancel();
+
     // Stop watchers
     if (CFileWatcherControl::Get() != nullptr) CFileWatcherControl::Get()->StopMonitoring();
 
@@ -72,6 +75,7 @@ void CDirStatDoc::DeleteContents()
     if (CFileTreeControl::Get() != nullptr) CFileTreeControl::Get()->DeleteAllItems();
     if (CFileDupeControl::Get() != nullptr) CFileDupeControl::Get()->DeleteAllItems();
     if (CFileSearchControl::Get() != nullptr) CFileSearchControl::Get()->DeleteAllItems();
+    if (CFileAISafetyControl::Get() != nullptr) CFileAISafetyControl::Get()->ClearResults();
     if (CFileWatcherControl::Get() != nullptr) CFileWatcherControl::Get()->DeleteAllItems();
 
     // Cleanup structures

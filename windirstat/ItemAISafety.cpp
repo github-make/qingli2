@@ -125,8 +125,15 @@ CTreeListItem* CItemAISafety::GetTreeListChild(const int i) const
 
 HICON CItemAISafety::GetIcon()
 {
-    if (m_visualInfo == nullptr) return nullptr;
-    if (m_visualInfo->icon != nullptr) return m_visualInfo->icon;
+    if (m_visualInfo == nullptr)
+    {
+        return nullptr;
+    }
+
+    if (m_visualInfo->icon != nullptr)
+    {
+        return m_visualInfo->icon;
+    }
 
     if (m_item == nullptr)
     {
@@ -134,9 +141,10 @@ HICON CItemAISafety::GetIcon()
         return m_visualInfo->icon;
     }
 
-    CDirStatApp::Get()->GetIconHandler()->DoAsyncShellInfoLookup(std::make_tuple(this,
-        m_visualInfo->control, m_item->GetPath(), m_item->GetAttributes(), &m_visualInfo->icon, nullptr));
-    return nullptr;
+    m_visualInfo->icon = m_item->IsTypeOrFlag(IT_DIRECTORY, IT_DRIVE)
+        ? GetIconHandler()->m_defaultFolderImage
+        : GetIconHandler()->m_defaultFileImage;
+    return m_visualInfo->icon;
 }
 
 COLORREF CItemAISafety::GetItemTextColor() const

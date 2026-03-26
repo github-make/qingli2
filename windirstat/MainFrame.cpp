@@ -1491,17 +1491,37 @@ void CMainFrame::OnAISafetyCheck()
     const auto items = CDirStatDoc::Get()->GetAllSelected();
     if (items.empty()) return;
 
+    // Expand selections to concrete file items up front so result callbacks never need to recreate rows.
+    std::vector<CItem*> analysisItems;
+    analysisItems.reserve(items.size());
+    std::unordered_set<CItem*> seenItems;
+    for (auto* item : CItem::GetItemsRecursive(items))
+    {
+        if (item == nullptr)
+        {
+            continue;
+        }
+
+        if (seenItems.insert(item).second)
+        {
+            analysisItems.push_back(item);
+        }
+    }
+
+    if (analysisItems.empty())
+    {
+        return;
+    }
+
     // Show the AI Safety tab
     GetFileTabbedView()->SetAISafetyTabVisibility(true);
     GetFileTabbedView()->SetActiveAISafetyView();
 
-    // Clear previous results
+    // Clear previous results and create all visible rows before the worker starts posting updates.
     if (auto* ctrl = CFileAISafetyControl::Get())
     {
         ctrl->ClearResults();
-
-        // Add pending items
-        for (auto* item : items)
+        for (auto* item : analysisItems)
         {
             ctrl->AddPendingItem(item);
         }
@@ -1520,8 +1540,7 @@ void CMainFrame::OnAISafetyCheck()
     {
     });
 
-    std::vector<CItem*> itemVec(items.begin(), items.end());
-    analyzer->AnalyzeItems(itemVec);
+    analyzer->AnalyzeItems(analysisItems);
 }
 
 void CMainFrame::OnUpdateAISafetyCheck(CCmdUI* pCmdUI)
