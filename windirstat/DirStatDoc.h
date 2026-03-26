@@ -143,6 +143,7 @@ protected:
     static bool DupeListHasFocus();
     static bool TopListHasFocus();
     static bool SearchListHasFocus();
+    static bool AISafetyListHasFocus();
     static bool WatcherListHasFocus();
     std::vector<CItem*> GetAllSelected();
     void InvalidateSelectionCache();

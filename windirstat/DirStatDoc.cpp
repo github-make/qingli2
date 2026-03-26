@@ -484,7 +484,7 @@ void CDirStatDoc::DeletePhysicalItems(const std::vector<CItem*>& items, const bo
         totalItems += static_cast<size_t>(1 + item->GetItemsCount());
     }
 
-    bool cancelled = false;
+    std::atomic<bool> cancelled = false;
     if (!toTrashBin) CProgressDlg(totalItems, false, AfxGetMainWnd(), [&](CProgressDlg* pdlg)
         {
             // Collect items depth-first and separate into files and directories
@@ -508,7 +508,7 @@ void CDirStatDoc::DeletePhysicalItems(const std::vector<CItem*>& items, const bo
             // Delete files in parallel
             std::for_each(std::execution::par, files.begin(), files.end(), [&](const CItem* item)
                 {
-                    if (pdlg->IsCancelled() || cancelled)
+                    if (pdlg->IsCancelled() || cancelled.load())
                     {
                         cancelled = true;
                         return;
@@ -519,7 +519,7 @@ void CDirStatDoc::DeletePhysicalItems(const std::vector<CItem*>& items, const bo
                 });
 
             // Check if cancelled during parallel deletion
-            if (cancelled) return;
+            if (cancelled.load()) return;
 
             // Delete directories in reverse order (children before parents)
             for (const auto& item : directories | std::views::reverse)
@@ -546,7 +546,7 @@ void CDirStatDoc::DeletePhysicalItems(const std::vector<CItem*>& items, const bo
             itemsToDelete = std::move(remainingItems);
         }).DoModal();
 
-    if (!cancelled && !itemsToDelete.empty())
+    if (!cancelled.load() && !itemsToDelete.empty())
         CProgressDlg(0, false, AfxGetMainWnd(), [&](const CProgressDlg* pdlg)
             {
                 // For trash bin operations, use IFileOperation directly
@@ -811,11 +811,17 @@ bool CDirStatDoc::WatcherListHasFocus()
     return LF_WATCHERLIST == CMainFrame::Get()->GetLogicalFocus();
 }
 
+bool CDirStatDoc::AISafetyListHasFocus()
+{
+    return LF_AILIST == CMainFrame::Get()->GetLogicalFocus();
+}
+
 CTreeListControl* CDirStatDoc::GetFocusControl()
 {
     if (DupeListHasFocus()) return CFileDupeControl::Get();
     if (TopListHasFocus()) return CFileTopControl::Get();
     if (SearchListHasFocus()) return CFileSearchControl::Get();
+    if (AISafetyListHasFocus()) return CFileAISafetyControl::Get();
     if (WatcherListHasFocus()) return CFileWatcherControl::Get();
     return CFileTreeControl::Get();
 }
@@ -1809,7 +1815,7 @@ void CDirStatDoc::StartScanningEngine(std::vector<CItem*> items)
         CFileDupeControl::Get()->RemoveItem(item);
         CFileTopControl::Get()->RemoveItem(item);
         CFileSearchControl::Get()->RemoveItem(item);
-        if (CFileAISafetyControl::Get()) CFileAISafetyControl::Get()->RemoveItem(item);
+        if (CFileAISafetyControl::Get()) CFileAISafetyControl::Get()->RemoveItemsInSubtree(item);
 
         // Record current visual arrangement to reapply afterward
         if (item->IsVisible())

@@ -64,7 +64,8 @@ class CAISafetyAnalyzer
     CWinHttpClient m_httpClient;
     std::jthread m_workerThread;
     std::atomic<bool> m_running{false};
-
+    std::atomic<std::uint64_t> m_generation{0};
+ 
     AISafetyResultCallback m_resultCallback;
     AISafetyProgressCallback m_progressCallback;
     AISafetyCompleteCallback m_completeCallback;
@@ -87,9 +88,13 @@ public:
     bool IsRunning() const { return m_running; }
 
 private:
-    void WorkerProc(std::vector<CItem*> items, std::stop_token stopToken);
-    void WorkerProcInner(std::vector<CItem*>& items, std::stop_token& stopToken);
-
+    bool IsGenerationCurrent(std::uint64_t generation) const noexcept { return m_generation.load() == generation; }
+    void PostResult(CItem* item, SAFETY_LEVEL level, const std::wstring& reason, std::uint64_t generation);
+    void PostProgress(size_t total, size_t completed, std::uint64_t generation);
+    void PostComplete(std::uint64_t generation);
+    void WorkerProc(std::vector<CItem*> items, std::stop_token stopToken, std::uint64_t generation);
+    void WorkerProcInner(std::vector<CItem*>& items, std::stop_token& stopToken, std::uint64_t generation);
+ 
     // Recursively expand folders into leaf file list
     static void ExpandFolders(CItem* item, std::vector<CItem*>& result);
 
@@ -106,7 +111,7 @@ private:
     static std::string BuildBatchRequest(const std::vector<FileAnalysisInfo>& batch);
 
     // Parse response JSON and call result callback for each item
-    void ParseBatchResponse(const std::string& responseBody, const std::vector<FileAnalysisInfo>& batch);
+    void ParseBatchResponse(const std::string& responseBody, const std::vector<FileAnalysisInfo>& batch, std::uint64_t generation);
 
     // Convert bytes to hex string for prompt
     static std::string BytesToHex(const std::vector<BYTE>& data);

@@ -48,19 +48,23 @@ CAISafetyAnalyzer* CAISafetyAnalyzer::Get()
 
 void CAISafetyAnalyzer::AnalyzeItems(const std::vector<CItem*>& items)
 {
-    // Cancel any running analysis
+    // Cancel any running analysis and invalidate any queued callbacks from the previous run
     Cancel();
+
+    const std::uint64_t generation = m_generation.fetch_add(1) + 1;
 
     // Start new worker thread
     m_running = true;
-    m_workerThread = std::jthread([this, items](std::stop_token token)
+    m_workerThread = std::jthread([this, items, generation](std::stop_token token)
     {
-        WorkerProc(items, token);
+        WorkerProc(items, token, generation);
     });
 }
 
 void CAISafetyAnalyzer::Cancel()
 {
+    m_generation.fetch_add(1);
+
     if (m_workerThread.joinable())
     {
         m_workerThread.request_stop();
@@ -69,28 +73,75 @@ void CAISafetyAnalyzer::Cancel()
     m_running = false;
 }
 
-void CAISafetyAnalyzer::WorkerProc(std::vector<CItem*> items, std::stop_token stopToken)
+void CAISafetyAnalyzer::PostResult(CItem* item, const SAFETY_LEVEL level, const std::wstring& reason, const std::uint64_t generation)
+{
+    if (!m_resultCallback || CMainFrame::Get() == nullptr)
+    {
+        return;
+    }
+
+    CMainFrame::Get()->PostToMessageThread([this, item, level, reason, generation]()
+    {
+        if (!IsGenerationCurrent(generation) || !m_resultCallback)
+        {
+            return;
+        }
+
+        m_resultCallback(item, level, reason);
+    });
+}
+
+void CAISafetyAnalyzer::PostProgress(const size_t total, const size_t completed, const std::uint64_t generation)
+{
+    if (!m_progressCallback || CMainFrame::Get() == nullptr)
+    {
+        return;
+    }
+
+    CMainFrame::Get()->PostToMessageThread([this, total, completed, generation]()
+    {
+        if (!IsGenerationCurrent(generation) || !m_progressCallback)
+        {
+            return;
+        }
+
+        m_progressCallback(total, completed);
+    });
+}
+
+void CAISafetyAnalyzer::PostComplete(const std::uint64_t generation)
+{
+    if (!m_completeCallback || CMainFrame::Get() == nullptr)
+    {
+        return;
+    }
+
+    CMainFrame::Get()->PostToMessageThread([this, generation]()
+    {
+        if (!IsGenerationCurrent(generation) || !m_completeCallback)
+        {
+            return;
+        }
+
+        m_completeCallback();
+    });
+}
+
+void CAISafetyAnalyzer::WorkerProc(std::vector<CItem*> items, std::stop_token stopToken, const std::uint64_t generation)
 {
     try
     {
-        WorkerProcInner(items, stopToken);
+        WorkerProcInner(items, stopToken, generation);
     }
     catch (...)
     {
         // Silently handle any exceptions to prevent process termination
     }
     m_running = false;
-
-    if (m_completeCallback)
-    {
-        CMainFrame::Get()->InvokeInMessageThread([this]()
-        {
-            m_completeCallback();
-        });
-    }
+    PostComplete(generation);
 }
 
-void CAISafetyAnalyzer::WorkerProcInner(std::vector<CItem*>& items, std::stop_token& stopToken)
+void CAISafetyAnalyzer::WorkerProcInner(std::vector<CItem*>& items, std::stop_token& stopToken, const std::uint64_t generation)
 {
     // Step 1: Expand all folders into individual files
     std::vector<CItem*> allFiles;
@@ -104,13 +155,7 @@ void CAISafetyAnalyzer::WorkerProcInner(std::vector<CItem*>& items, std::stop_to
     size_t completed = 0;
 
     // Notify progress
-    if (m_progressCallback)
-    {
-        CMainFrame::Get()->InvokeInMessageThread([this, totalFiles]()
-        {
-            m_progressCallback(totalFiles, 0);
-        });
-    }
+    PostProgress(totalFiles, 0, generation);
 
     // Step 2: Process files in batches
     const int batchSize = (std::max)(1, static_cast<int>(COptions::AIBatchSize));
@@ -131,21 +176,9 @@ void CAISafetyAnalyzer::WorkerProcInner(std::vector<CItem*>& items, std::stop_to
             CItem* item = info.item;
             SAFETY_LEVEL level = ruleResult.value();
             std::wstring reason = L"Matched custom rule";
-            if (m_resultCallback)
-            {
-                CMainFrame::Get()->InvokeInMessageThread([this, item, level, reason]()
-                {
-                    m_resultCallback(item, level, reason);
-                });
-            }
+            PostResult(item, level, reason, generation);
             completed++;
-            if (m_progressCallback)
-            {
-                CMainFrame::Get()->InvokeInMessageThread([this, totalFiles, completed]()
-                {
-                    m_progressCallback(totalFiles, completed);
-                });
-            }
+            PostProgress(totalFiles, completed, generation);
             continue;
         }
 
@@ -165,45 +198,24 @@ void CAISafetyAnalyzer::WorkerProcInner(std::vector<CItem*>& items, std::stop_to
 
             if (resp.success)
             {
-                ParseBatchResponse(resp.body, batch);
+                ParseBatchResponse(resp.body, batch, generation);
             }
             else
             {
                 // Report error for all items in batch
                 for (const auto& fileInfo : batch)
                 {
-                    CItem* item = fileInfo.item;
-                    std::wstring error = resp.error;
-                    if (m_resultCallback)
-                    {
-                        CMainFrame::Get()->InvokeInMessageThread([this, item, error]()
-                        {
-                            m_resultCallback(item, SL_ERROR, error);
-                        });
-                    }
+                    PostResult(fileInfo.item, SL_ERROR, resp.error, generation);
                 }
             }
 
             completed += batch.size();
-            if (m_progressCallback)
-            {
-                CMainFrame::Get()->InvokeInMessageThread([this, totalFiles, completed]()
-                {
-                    m_progressCallback(totalFiles, completed);
-                });
-            }
+            PostProgress(totalFiles, completed, generation);
 
             batch.clear();
         }
     }
 
-    if (m_completeCallback)
-    {
-        CMainFrame::Get()->InvokeInMessageThread([this]()
-        {
-            m_completeCallback();
-        });
-    }
 }
 
 void CAISafetyAnalyzer::ExpandFolders(CItem* item, std::vector<CItem*>& result)
@@ -534,7 +546,7 @@ static int ExtractJsonInt(const std::string& json, const std::string& key, size_
     return atoi(json.c_str() + pos);
 }
 
-void CAISafetyAnalyzer::ParseBatchResponse(const std::string& responseBody, const std::vector<FileAnalysisInfo>& batch)
+void CAISafetyAnalyzer::ParseBatchResponse(const std::string& responseBody, const std::vector<FileAnalysisInfo>& batch, const std::uint64_t generation)
 {
     // Extract content from OpenAI response: {"choices":[{"message":{"content":"..."}}]}
     const std::string content = ExtractJsonString(responseBody, "content");
@@ -544,13 +556,7 @@ void CAISafetyAnalyzer::ParseBatchResponse(const std::string& responseBody, cons
         for (const auto& info : batch)
         {
             CItem* item = info.item;
-            if (m_resultCallback)
-            {
-                CMainFrame::Get()->InvokeInMessageThread([this, item]()
-                {
-                    m_resultCallback(item, SL_ERROR, L"Failed to parse API response");
-                });
-            }
+            PostResult(item, SL_ERROR, L"Failed to parse API response", generation);
         }
         return;
     }
@@ -582,13 +588,7 @@ void CAISafetyAnalyzer::ParseBatchResponse(const std::string& responseBody, cons
             SAFETY_LEVEL safetyLevel = ParseLevel(level);
             std::wstring wReason = Utf8ToWide(reason);
 
-            if (m_resultCallback)
-            {
-                CMainFrame::Get()->InvokeInMessageThread([this, item, safetyLevel, wReason]()
-                {
-                    m_resultCallback(item, safetyLevel, wReason);
-                });
-            }
+            PostResult(item, safetyLevel, wReason, generation);
         }
     }
 
@@ -598,13 +598,7 @@ void CAISafetyAnalyzer::ParseBatchResponse(const std::string& responseBody, cons
         if (!processed[i])
         {
             CItem* item = batch[i].item;
-            if (m_resultCallback)
-            {
-                CMainFrame::Get()->InvokeInMessageThread([this, item]()
-                {
-                    m_resultCallback(item, SL_ERROR, L"No result from API");
-                });
-            }
+            PostResult(item, SL_ERROR, L"No result from API", generation);
         }
     }
 }

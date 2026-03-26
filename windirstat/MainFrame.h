@@ -139,6 +139,7 @@ class CMainFrame final : public CFrameWndEx
 {
 protected:
     static constexpr DWORD WM_CALLBACKUI = WM_USER + 1;
+    static constexpr DWORD WM_CALLBACKUI_ASYNC = WM_USER + 2;
     static UINT s_TaskBarMessage;
     static CMainFrame* s_Singleton;
 
@@ -148,6 +149,7 @@ protected:
 
     void InitialShowWindow();
     void InvokeInMessageThread(std::function<void()> callback) const;
+    void PostToMessageThread(std::function<void()> callback) const;
 
     void RestoreTreeMapView();
     void RestoreExtensionView();
@@ -230,6 +232,7 @@ protected:
     afx_msg LRESULT OnEnterSizeMove(WPARAM, LPARAM);
     afx_msg LRESULT OnExitSizeMove(WPARAM, LPARAM);
     afx_msg LRESULT OnCallbackRequest(WPARAM, LPARAM lParam);
+    afx_msg LRESULT OnCallbackRequestAsync(WPARAM, LPARAM lParam);
     afx_msg void OnTimer(UINT_PTR nIDEvent);
     afx_msg void OnClose();
     afx_msg void OnInitMenuPopup(CMenu* pPopupMenu, UINT nIndex, BOOL bSysMenu);

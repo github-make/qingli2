@@ -37,7 +37,7 @@ CFileAISafetyControl* CFileAISafetyControl::m_singleton = nullptr;
 
 void CFileAISafetyControl::AddPendingItem(CItem* item)
 {
-    if (m_rootItem == nullptr) return;
+    if (m_rootItem == nullptr || item == nullptr) return;
 
     // Check if already tracked
     if (m_itemTracker.contains(item)) return;
@@ -49,22 +49,24 @@ void CFileAISafetyControl::AddPendingItem(CItem* item)
 
 void CFileAISafetyControl::UpdateResult(CItem* item, SAFETY_LEVEL level, const std::wstring& reason)
 {
-    const auto it = m_itemTracker.find(item);
+    auto it = m_itemTracker.find(item);
     if (it == m_itemTracker.end())
     {
-        // Item not yet added - add it first
         AddPendingItem(item);
-        const auto it2 = m_itemTracker.find(item);
-        if (it2 == m_itemTracker.end()) return;
-        it2->second->SetSafetyResult(level, reason);
-    }
-    else
-    {
-        it->second->SetSafetyResult(level, reason);
+        it = m_itemTracker.find(item);
+        if (it == m_itemTracker.end())
+        {
+            return;
+        }
     }
 
+    it->second->SetSafetyResult(level, reason);
+
     // Force redraw
-    RedrawItems(0, GetItemCount() - 1);
+    if (GetItemCount() > 0)
+    {
+        RedrawItems(0, GetItemCount() - 1);
+    }
 }
 
 void CFileAISafetyControl::ClearResults()
@@ -79,13 +81,59 @@ void CFileAISafetyControl::ClearResults()
 
 void CFileAISafetyControl::RemoveItem(CItem* item)
 {
-    const auto findItem = m_itemTracker.find(item);
-    if (findItem == m_itemTracker.end()) return;
+    RemoveItemsInSubtree(item);
+}
+
+void CFileAISafetyControl::RemoveItemsInSubtree(CItem* item)
+{
+    if (item == nullptr || m_rootItem == nullptr || m_itemTracker.empty())
+    {
+        return;
+    }
+
+    std::vector<CItem*> itemsToRemove;
+    itemsToRemove.reserve(m_itemTracker.size());
+    for (const auto& [trackedItem, _] : m_itemTracker)
+    {
+        if (trackedItem == item || item->IsAncestorOf(trackedItem))
+        {
+            itemsToRemove.push_back(trackedItem);
+        }
+    }
+
+    if (itemsToRemove.empty())
+    {
+        return;
+    }
 
     SetRedraw(FALSE);
-    m_rootItem->RemoveChild(findItem->second);
-    m_itemTracker.erase(findItem);
+    for (auto* trackedItem : itemsToRemove)
+    {
+        const auto findItem = m_itemTracker.find(trackedItem);
+        if (findItem == m_itemTracker.end())
+        {
+            continue;
+        }
+
+        m_rootItem->RemoveChild(findItem->second);
+        m_itemTracker.erase(findItem);
+    }
     SetRedraw(TRUE);
+}
+
+bool CFileAISafetyControl::ContainsTrackedItem(const CItem* item) const
+{
+    return item != nullptr && m_itemTracker.contains(const_cast<CItem*>(item));
+}
+
+bool CFileAISafetyControl::IsTrackedItemStale(const CItem* item) const
+{
+    return item == nullptr || !ContainsTrackedItem(item);
+}
+
+void CFileAISafetyControl::SortItems()
+{
+    __super::SortItems();
 }
 
 void CFileAISafetyControl::AfterDeleteAllItems()

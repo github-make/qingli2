@@ -373,6 +373,7 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWndEx)
     ON_MESSAGE(WM_ENTERSIZEMOVE, OnEnterSizeMove)
     ON_MESSAGE(WM_EXITSIZEMOVE, OnExitSizeMove)
     ON_MESSAGE(WM_CALLBACKUI, OnCallbackRequest)
+    ON_MESSAGE(WM_CALLBACKUI_ASYNC, OnCallbackRequestAsync)
     ON_MESSAGE(DarkMode::WM_UAHDRAWMENU, OnUahDrawMenu)
     ON_MESSAGE(DarkMode::WM_UAHDRAWMENUITEM, OnUahDrawMenu)
     ON_REGISTERED_MESSAGE(s_TaskBarMessage, OnTaskButtonCreated)
@@ -749,6 +750,21 @@ void CMainFrame::InvokeInMessageThread(std::function<void()> callback) const
     else Get()->SendMessage(WM_CALLBACKUI, 0, reinterpret_cast<LPARAM>(&callback));
 }
 
+void CMainFrame::PostToMessageThread(std::function<void()> callback) const
+{
+    if (CDirStatApp::Get()->m_nThreadID == GetCurrentThreadId())
+    {
+        callback();
+        return;
+    }
+
+    auto* heapCallback = new std::function<void()>(std::move(callback));
+    if (!Get()->PostMessage(WM_CALLBACKUI_ASYNC, 0, reinterpret_cast<LPARAM>(heapCallback)))
+    {
+        delete heapCallback;
+    }
+}
+
 void CMainFrame::OnClose()
 {
     CWaitCursor wc;
@@ -912,6 +928,13 @@ LRESULT CMainFrame::OnCallbackRequest(WPARAM, const LPARAM lParam)
 {
     const auto & callback = *static_cast<std::function<void()>*>(std::bit_cast<LPVOID>(lParam));
     callback();
+    return 0;
+}
+
+LRESULT CMainFrame::OnCallbackRequestAsync(WPARAM, const LPARAM lParam)
+{
+    std::unique_ptr<std::function<void()>> callback(static_cast<std::function<void()>*>(std::bit_cast<LPVOID>(lParam)));
+    (*callback)();
     return 0;
 }
 

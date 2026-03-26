@@ -34,6 +34,10 @@ public:
     void UpdateResult(CItem* item, SAFETY_LEVEL level, const std::wstring& reason);
     void ClearResults();
     void RemoveItem(CItem* item);
+    void RemoveItemsInSubtree(CItem* item);
+    bool ContainsTrackedItem(const CItem* item) const;
+    bool IsTrackedItemStale(const CItem* item) const;
+    void SortItems() override;
     void AfterDeleteAllItems() override;
 
 protected:
