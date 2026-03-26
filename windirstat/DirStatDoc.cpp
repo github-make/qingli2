@@ -21,6 +21,7 @@
 #include "TreeMapView.h"
 #include "FileTopControl.h"
 #include "FileSearchControl.h"
+#include "FileAISafetyControl.h"
 #include "FileWatcherControl.h"
 #include "FinderBasic.h"
 #include "FinderNtfs.h"
@@ -1796,14 +1797,19 @@ void CDirStatDoc::StartScanningEngine(std::vector<CItem*> items)
 
     // Remove items in UI thread so we do not conflict with the timer updates
     const auto selectedItems = GetAllSelected();
+
+    // Cancel any running AI analysis to avoid dangling pointer access in worker thread
+    CAISafetyAnalyzer::Get()->Cancel();
+
     using VisualInfo = struct { int scrollPosition; bool wasExpanded; bool isSelected; };
     std::unordered_map<CItem*, VisualInfo> visualInfo;
     for (auto item : std::vector(items))
     {
-        // Clear items from duplicates and top list;
+        // Clear items from duplicates, top list, search, and AI safety
         CFileDupeControl::Get()->RemoveItem(item);
         CFileTopControl::Get()->RemoveItem(item);
         CFileSearchControl::Get()->RemoveItem(item);
+        if (CFileAISafetyControl::Get()) CFileAISafetyControl::Get()->RemoveItem(item);
 
         // Record current visual arrangement to reapply afterward
         if (item->IsVisible())
