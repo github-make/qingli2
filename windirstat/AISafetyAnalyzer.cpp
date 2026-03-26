@@ -75,28 +75,19 @@ void CAISafetyAnalyzer::WorkerProc(std::vector<CItem*> items, std::stop_token st
     {
         WorkerProcInner(items, stopToken);
     }
-    catch (const std::exception& e)
-    {
-        std::wstring error = L"Analysis failed: " + Utf8ToWide(e.what());
-        if (m_completeCallback)
-        {
-            CMainFrame::Get()->InvokeInMessageThread([this]()
-            {
-                m_completeCallback();
-            });
-        }
-    }
     catch (...)
     {
-        if (m_completeCallback)
-        {
-            CMainFrame::Get()->InvokeInMessageThread([this]()
-            {
-                m_completeCallback();
-            });
-        }
+        // Silently handle any exceptions to prevent process termination
     }
     m_running = false;
+
+    if (m_completeCallback)
+    {
+        CMainFrame::Get()->InvokeInMessageThread([this]()
+        {
+            m_completeCallback();
+        });
+    }
 }
 
 void CAISafetyAnalyzer::WorkerProcInner(std::vector<CItem*>& items, std::stop_token& stopToken)
