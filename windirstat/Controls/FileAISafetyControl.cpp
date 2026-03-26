@@ -72,7 +72,8 @@ void CFileAISafetyControl::ClearResults()
     m_itemTracker.clear();
 
     SetRedraw(FALSE);
-    AfterDeleteAllItems();
+    DeleteAllItems();       // Clear list control items first to avoid dangling pointers
+    AfterDeleteAllItems();  // Then recreate root
     SetRedraw(TRUE);
 }
 

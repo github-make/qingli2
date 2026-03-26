@@ -88,6 +88,7 @@ public:
 
 private:
     void WorkerProc(std::vector<CItem*> items, std::stop_token stopToken);
+    void WorkerProcInner(std::vector<CItem*>& items, std::stop_token& stopToken);
 
     // Recursively expand folders into leaf file list
     static void ExpandFolders(CItem* item, std::vector<CItem*>& result);

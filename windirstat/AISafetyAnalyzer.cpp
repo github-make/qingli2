@@ -71,6 +71,36 @@ void CAISafetyAnalyzer::Cancel()
 
 void CAISafetyAnalyzer::WorkerProc(std::vector<CItem*> items, std::stop_token stopToken)
 {
+    try
+    {
+        WorkerProcInner(items, stopToken);
+    }
+    catch (const std::exception& e)
+    {
+        std::wstring error = L"Analysis failed: " + Utf8ToWide(e.what());
+        if (m_completeCallback)
+        {
+            CMainFrame::Get()->InvokeInMessageThread([this]()
+            {
+                m_completeCallback();
+            });
+        }
+    }
+    catch (...)
+    {
+        if (m_completeCallback)
+        {
+            CMainFrame::Get()->InvokeInMessageThread([this]()
+            {
+                m_completeCallback();
+            });
+        }
+    }
+    m_running = false;
+}
+
+void CAISafetyAnalyzer::WorkerProcInner(std::vector<CItem*>& items, std::stop_token& stopToken)
+{
     // Step 1: Expand all folders into individual files
     std::vector<CItem*> allFiles;
     for (CItem* item : items)
@@ -175,8 +205,6 @@ void CAISafetyAnalyzer::WorkerProc(std::vector<CItem*> items, std::stop_token st
             batch.clear();
         }
     }
-
-    m_running = false;
 
     if (m_completeCallback)
     {
